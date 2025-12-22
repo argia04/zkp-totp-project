@@ -1,0 +1,8 @@
+Aspect,Password Only,Password + TOTP,ZKP + TOTP (Proposed)
+Password di server,Ya (hash),Ya (hash),Tidak
+Proteksi replay,Tidak,Parsial,Ya
+Privacy,Rendah,Rendah,Tinggi
+Security,Rendah,Sedang,Tinggi
+Complexity,Rendah,Sedang,Tinggi
+Overhead (ms),50,100,~450-550
+Transparency,Opaque,Parsial,Verifiable

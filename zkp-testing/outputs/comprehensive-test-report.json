@@ -1,0 +1,230 @@
+{
+  "metadata": {
+    "timestamp": "2025-12-20T14:31:11.946Z",
+    "totalDuration": "2.85 seconds",
+    "thesis": "Implementasi Two-Factor Authentication pada Aplikasi Web Menggunakan Zero Knowledge Proof dan Time-based One-Time Password"
+  },
+  "functionalTesting": {
+    "totalTests": 8,
+    "passed": 8,
+    "failed": 0,
+    "successRate": "100.00%",
+    "details": [
+      {
+        "id": "TC-01",
+        "name": "Registrasi dengan username dan password valid",
+        "status": "PASS",
+        "details": "QR Code dan secret TOTP berhasil dibuat",
+        "timestamp": "2025-12-03T10:59:40.324Z"
+      },
+      {
+        "id": "TC-02",
+        "name": "Login dengan kredensial valid dan TOTP benar",
+        "status": "PASS",
+        "details": "Autentikasi berhasil",
+        "timestamp": "2025-12-03T10:59:40.373Z"
+      },
+      {
+        "id": "TC-03",
+        "name": "Login dengan password salah",
+        "status": "PASS",
+        "details": "Verifikasi ZKP gagal seperti yang diharapkan",
+        "timestamp": "2025-12-03T10:59:40.407Z"
+      },
+      {
+        "id": "TC-04",
+        "name": "Login dengan TOTP salah",
+        "status": "PASS",
+        "details": "Verifikasi TOTP gagal seperti yang diharapkan",
+        "timestamp": "2025-12-03T10:59:40.441Z"
+      },
+      {
+        "id": "TC-05",
+        "name": "Login dengan password benar tapi TOTP salah",
+        "status": "PASS",
+        "details": "Ditolak karena TOTP invalid",
+        "timestamp": "2025-12-03T10:59:40.476Z"
+      },
+      {
+        "id": "TC-06",
+        "name": "Registrasi dengan username yang sudah ada",
+        "status": "PASS",
+        "details": "Error: username sudah terdaftar",
+        "timestamp": "2025-12-03T10:59:40.483Z"
+      },
+      {
+        "id": "TC-08",
+        "name": "Login dengan TOTP kadaluarsa (>90 detik)",
+        "status": "PASS",
+        "details": "Ditolak karena TOTP expired",
+        "timestamp": "2025-12-03T10:59:40.522Z"
+      },
+      {
+        "id": "TC-07",
+        "name": "Login dengan username yang tidak terdaftar",
+        "status": "PASS",
+        "details": "Error: user tidak ditemukan",
+        "timestamp": "2025-12-03T10:59:40.524Z"
+      }
+    ]
+  },
+  "securityTesting": {
+    "totalTests": 7,
+    "secure": 6,
+    "vulnerable": 1,
+    "securityScore": "85.71%",
+    "details": [
+      {
+        "id": "SEC-01",
+        "name": "Replay bukti ZKP segera setelah login berhasil",
+        "status": "SECURE",
+        "details": "Challenge dihapus setelah digunakan. Replay ditolak.",
+        "securityLevel": "PROTECTED",
+        "timestamp": "2025-12-20T14:31:11.742Z"
+      },
+      {
+        "id": "SEC-02",
+        "name": "Replay kode TOTP dalam jendela waktu yang sama",
+        "status": "SECURE",
+        "details": "TOTP replay terdeteksi dan ditolak",
+        "securityLevel": "PROTECTED",
+        "timestamp": "2025-12-20T14:31:11.802Z"
+      },
+      {
+        "id": "SEC-03",
+        "name": "Replay paket lengkap (ZKP + TOTP)",
+        "status": "SECURE",
+        "details": "Kombinasi proteksi challenge dan waktu efektif",
+        "securityLevel": "PROTECTED",
+        "timestamp": "2025-12-20T14:31:11.839Z"
+      },
+      {
+        "id": "SEC-04",
+        "name": "Replay dengan sessionId yang sama",
+        "status": "VULNERABLE",
+        "details": "SessionID dapat digunakan berulang kali",
+        "securityLevel": "HIGH RISK",
+        "timestamp": "2025-12-20T14:31:11.876Z"
+      },
+      {
+        "id": "SEC-05",
+        "name": "Replay TOTP setelah 90+ detik",
+        "status": "SECURE",
+        "details": "TOTP otomatis kadaluarsa - ditolak",
+        "securityLevel": "PROTECTED",
+        "timestamp": "2025-12-20T14:31:11.907Z"
+      },
+      {
+        "id": "SEC-06",
+        "name": "Man-in-the-Middle untuk menangkap password",
+        "status": "SECURE",
+        "details": "Password tidak pernah ditransmisikan",
+        "securityLevel": "PROTECTED",
+        "timestamp": "2025-12-20T14:31:11.936Z"
+      },
+      {
+        "id": "SEC-07",
+        "name": "Database breach untuk mendapat password",
+        "status": "SECURE",
+        "details": "Hanya public key tersimpan - tidak dapat memulihkan password",
+        "securityLevel": "PROTECTED",
+        "timestamp": "2025-12-20T14:31:11.938Z"
+      }
+    ]
+  },
+  "performanceTesting": {
+    "averageLoginTime": "31.13 ms",
+    "concurrentLoadTest": {
+      "users": 100,
+      "successRate": "100.00%",
+      "avgResponseTime": "1451.43 ms",
+      "p95": "2082.60 ms"
+    },
+    "overhead": {
+      "clientTime": 8.775399999998626,
+      "serverTime": 18.837200000001758,
+      "totalTime": 27.612600000000384
+    },
+    "fullDetails": {
+      "keyGen": {
+        "mean": "0.13",
+        "stdDev": "0.16",
+        "min": "0.08",
+        "max": "1.11",
+        "p50": "0.09",
+        "p95": "0.29",
+        "p99": "1.11"
+      },
+      "registration": {
+        "mean": "13.83",
+        "stdDev": "7.98",
+        "min": "7.39",
+        "max": "49.70",
+        "p50": "11.91",
+        "p95": "21.45",
+        "p99": "49.70"
+      },
+      "challenge": {
+        "mean": "2.15",
+        "stdDev": "0.48",
+        "min": "1.45",
+        "max": "3.92",
+        "p50": "2.11",
+        "p95": "3.11",
+        "p99": "3.92"
+      },
+      "proofGen": {
+        "mean": "6.94",
+        "stdDev": "0.73",
+        "min": "6.26",
+        "max": "10.74",
+        "p50": "6.69",
+        "p95": "8.48",
+        "p99": "10.74"
+      },
+      "login": {
+        "mean": "31.13",
+        "stdDev": "3.56",
+        "min": "26.91",
+        "max": "44.50",
+        "p50": "30.20",
+        "p95": "40.02",
+        "p99": "44.50"
+      },
+      "verification": {
+        "mean": "18.12",
+        "stdDev": "1.34",
+        "min": "16.48",
+        "max": "22.79",
+        "p50": "17.65",
+        "p95": "21.20",
+        "p99": "22.79"
+      },
+      "overhead": {
+        "clientTime": 8.775399999998626,
+        "serverTime": 18.837200000001758,
+        "totalTime": 27.612600000000384
+      },
+      "concurrent": {
+        "successCount": 100,
+        "failCount": 0,
+        "totalTime": 2208.8993999999984,
+        "stats": {
+          "mean": "1451.43",
+          "stdDev": "349.63",
+          "min": "102.39",
+          "max": "2155.22",
+          "p50": "1319.65",
+          "p95": "2082.60",
+          "p99": "2155.22"
+        }
+      }
+    }
+  },
+  "overallAssessment": {
+    "functionality": "EXCELLENT",
+    "security": "GOOD",
+    "performance": "EXCELLENT",
+    "finalScore": "94.29%"
+  }
+}

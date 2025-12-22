@@ -1,0 +1,27 @@
+{
+  "name": "zkp-totp-testing-suite",
+  "version": "1.0.0",
+  "description": "Comprehensive Testing Suite for ZKP + TOTP Authentication System - Skripsi Testing",
+  "main": "run-all-tests.js",
+  "scripts": {
+    "test:all": "node run-all-tests.js",
+    "test:functional": "node test-functional.js",
+    "test:security": "node test-replay-attack.js",
+    "test:performance": "node test-performance.js"
+  },
+  "keywords": [
+    "zkp",
+    "totp",
+    "authentication",
+    "security",
+    "testing",
+    "schnorr",
+    "2fa"
+  ],
+  "author": "Argia Yanuar Fachrussy",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "speakeasy": "^2.0.0"
+  }
+}

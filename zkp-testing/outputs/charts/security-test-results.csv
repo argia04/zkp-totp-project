@@ -1,0 +1,8 @@
+Test ID,Scenario,Status,Risk Level
+SEC-01,Replay bukti ZKP segera setelah login be...,SECURE,PROTECTED
+SEC-02,Replay kode TOTP dalam jendela waktu yan...,SECURE,MEDIUM RISK
+SEC-03,Replay paket lengkap (ZKP + TOTP),SECURE,PROTECTED
+SEC-04,Replay dengan sessionId yang sama,SECURE,PROTECTED
+SEC-05,Replay TOTP setelah 90+ detik,SECURE,PROTECTED
+SEC-06,Man-in-the-Middle untuk menangkap passwo...,SECURE,PROTECTED
+SEC-07,Database breach untuk mendapat password,SECURE,PROTECTED

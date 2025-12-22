@@ -1,0 +1,109 @@
+{
+  "summary": {
+    "keyGen": {
+      "mean": "0.14",
+      "stdDev": "0.18",
+      "min": "0.08",
+      "max": "1.66",
+      "p50": "0.09",
+      "p95": "0.25",
+      "p99": "1.66"
+    },
+    "registration": {
+      "mean": "16.54",
+      "stdDev": "10.53",
+      "min": "8.66",
+      "max": "87.83",
+      "p50": "14.89",
+      "p95": "22.59",
+      "p99": "87.83"
+    },
+    "challenge": {
+      "mean": "1.99",
+      "stdDev": "0.46",
+      "min": "1.42",
+      "max": "4.61",
+      "p50": "1.87",
+      "p95": "2.78",
+      "p99": "4.61"
+    },
+    "proofGen": {
+      "mean": "6.82",
+      "stdDev": "0.90",
+      "min": "6.16",
+      "max": "10.36",
+      "p50": "6.44",
+      "p95": "9.29",
+      "p99": "10.36"
+    },
+    "login": {
+      "mean": "31.62",
+      "stdDev": "3.48",
+      "min": "26.18",
+      "max": "44.04",
+      "p50": "31.32",
+      "p95": "37.81",
+      "p99": "44.04"
+    },
+    "verification": {
+      "mean": "18.09",
+      "stdDev": "1.44",
+      "min": "16.59",
+      "max": "22.20",
+      "p50": "17.44",
+      "p95": "21.31",
+      "p99": "22.20"
+    },
+    "overhead": {
+      "clientTime": 6.501000000000204,
+      "serverTime": 18.065699999999197,
+      "totalTime": 24.5666999999994
+    },
+    "concurrent": {
+      "successCount": 100,
+      "failCount": 0,
+      "totalTime": 2038.1478000000025,
+      "stats": {
+        "mean": "1316.45",
+        "stdDev": "328.18",
+        "min": "92.91",
+        "max": "1990.73",
+        "p50": "1183.39",
+        "p95": "1924.91",
+        "p99": "1990.73"
+      }
+    }
+  },
+  "rawData": [
+    {
+      "operation": "Client-side Key Generation",
+      "time": 0.14,
+      "timestamp": "2025-12-20T19:13:53.404Z"
+    },
+    {
+      "operation": "Registration (total with TOTP setup)",
+      "time": 16.54,
+      "timestamp": "2025-12-20T19:13:59.789Z"
+    },
+    {
+      "operation": "Request challenge",
+      "time": 1.99,
+      "timestamp": "2025-12-20T19:14:00.016Z"
+    },
+    {
+      "operation": "Generate ZKP proof (client-side)",
+      "time": 6.82,
+      "timestamp": "2025-12-20T19:14:00.699Z"
+    },
+    {
+      "operation": "Total login time (end-to-end)",
+      "time": 31.62,
+      "timestamp": "2025-12-20T19:14:07.746Z"
+    },
+    {
+      "operation": "Verify ZKP (server-side)",
+      "time": 18.09,
+      "timestamp": "2025-12-20T19:14:12.272Z"
+    }
+  ]
+}

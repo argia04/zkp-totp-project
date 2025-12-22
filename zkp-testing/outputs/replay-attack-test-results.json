@@ -1,0 +1,58 @@
+[
+  {
+    "id": "SEC-01",
+    "name": "Replay bukti ZKP segera setelah login berhasil",
+    "status": "SECURE",
+    "details": "Challenge dihapus setelah digunakan - Challenge tidak valid atau sudah kadaluarsa",
+    "securityLevel": "PROTECTED",
+    "timestamp": "2025-12-20T15:14:12.746Z"
+  },
+  {
+    "id": "SEC-02",
+    "name": "Replay kode TOTP dalam jendela waktu yang sama",
+    "status": "SECURE",
+    "details": "TOTP replay terdeteksi dan ditolak",
+    "securityLevel": "PROTECTED",
+    "timestamp": "2025-12-20T15:14:12.808Z"
+  },
+  {
+    "id": "SEC-03",
+    "name": "Replay paket lengkap (ZKP + TOTP)",
+    "status": "SECURE",
+    "details": "Kombinasi proteksi challenge dan waktu efektif",
+    "securityLevel": "PROTECTED",
+    "timestamp": "2025-12-20T15:14:12.841Z"
+  },
+  {
+    "id": "SEC-04",
+    "name": "Replay dengan sessionId yang sama",
+    "status": "SECURE",
+    "details": "Challenge tidak tersimpan lagi - Challenge tidak valid atau sudah kadaluarsa",
+    "securityLevel": "PROTECTED",
+    "timestamp": "2025-12-20T15:14:12.882Z"
+  },
+  {
+    "id": "SEC-05",
+    "name": "Replay TOTP setelah 90+ detik",
+    "status": "SECURE",
+    "details": "TOTP otomatis kadaluarsa - ditolak",
+    "securityLevel": "PROTECTED",
+    "timestamp": "2025-12-20T15:14:12.913Z"
+  },
+  {
+    "id": "SEC-06",
+    "name": "Man-in-the-Middle untuk menangkap password",
+    "status": "SECURE",
+    "details": "Password tidak pernah ditransmisikan",
+    "securityLevel": "PROTECTED",
+    "timestamp": "2025-12-20T15:14:12.943Z"
+  },
+  {
+    "id": "SEC-07",
+    "name": "Database breach untuk mendapat password",
+    "status": "SECURE",
+    "details": "Hanya public key tersimpan - tidak dapat memulihkan password",
+    "securityLevel": "PROTECTED",
+    "timestamp": "2025-12-20T15:14:12.944Z"
+  }
+]

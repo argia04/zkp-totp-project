@@ -1,0 +1,58 @@
+[
+  {
+    "id": "TC-01",
+    "name": "Registrasi dengan username dan password valid",
+    "status": "PASS",
+    "details": "QR Code dan secret TOTP berhasil dibuat",
+    "timestamp": "2025-12-03T10:59:40.324Z"
+  },
+  {
+    "id": "TC-02",
+    "name": "Login dengan kredensial valid dan TOTP benar",
+    "status": "PASS",
+    "details": "Autentikasi berhasil",
+    "timestamp": "2025-12-03T10:59:40.373Z"
+  },
+  {
+    "id": "TC-03",
+    "name": "Login dengan password salah",
+    "status": "PASS",
+    "details": "Verifikasi ZKP gagal seperti yang diharapkan",
+    "timestamp": "2025-12-03T10:59:40.407Z"
+  },
+  {
+    "id": "TC-04",
+    "name": "Login dengan TOTP salah",
+    "status": "PASS",
+    "details": "Verifikasi TOTP gagal seperti yang diharapkan",
+    "timestamp": "2025-12-03T10:59:40.441Z"
+  },
+  {
+    "id": "TC-05",
+    "name": "Login dengan password benar tapi TOTP salah",
+    "status": "PASS",
+    "details": "Ditolak karena TOTP invalid",
+    "timestamp": "2025-12-03T10:59:40.476Z"
+  },
+  {
+    "id": "TC-06",
+    "name": "Registrasi dengan username yang sudah ada",
+    "status": "PASS",
+    "details": "Error: username sudah terdaftar",
+    "timestamp": "2025-12-03T10:59:40.483Z"
+  },
+  {
+    "id": "TC-08",
+    "name": "Login dengan TOTP kadaluarsa (>90 detik)",
+    "status": "PASS",
+    "details": "Ditolak karena TOTP expired",
+    "timestamp": "2025-12-03T10:59:40.522Z"
+  },
+  {
+    "id": "TC-07",
+    "name": "Login dengan username yang tidak terdaftar",
+    "status": "PASS",
+    "details": "Error: user tidak ditemukan",
+    "timestamp": "2025-12-03T10:59:40.524Z"
+  }
+]

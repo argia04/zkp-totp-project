@@ -1,0 +1,9 @@
+Test ID,Test Name,Status
+TC-01,Registrasi dengan username dan password valid,PASS
+TC-02,Login dengan kredensial valid dan TOTP benar,PASS
+TC-03,Login dengan password salah,PASS
+TC-04,Login dengan TOTP salah,PASS
+TC-05,Login dengan password benar tapi TOTP salah,PASS
+TC-06,Registrasi dengan username yang sudah ada,PASS
+TC-08,Login dengan TOTP kadaluarsa (>90 detik),PASS
+TC-07,Login dengan username yang tidak terdaftar,PASS
