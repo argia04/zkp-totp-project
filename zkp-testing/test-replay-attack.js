@@ -2,6 +2,16 @@
  * PENGUJIAN KEAMANAN - REPLAY ATTACK
  * 100 Iterasi per Skenario
  * Berdasarkan OWASP Testing Guide v4.2 dan NIST SP 800-63B
+ *
+ * Notasi Protokol Schnorr (Tabel 2.1):
+ *   p = Bilangan prima besar (modulus)
+ *   g = Generator grup
+ *   x = Nilai rahasia (private key)
+ *   y = g^x mod p (public key)
+ *   r = Nonce acak
+ *   t = g^r mod p (commitment)
+ *   c = Challenge
+ *   z = r + cx mod p (response)
  */
 
 const axios = require("axios");
@@ -11,13 +21,19 @@ const readline = require("readline");
 const API_URL = "http://localhost:3001/api";
 const ITERATIONS = 100;
 
+// ========================================
 // Schnorr Protocol Constants
-const crypto = {
+// Sesuai Tabel 2.1 Bab 2
+// ========================================
+const schnorr = {
+  // p: Bilangan prima besar (modulus)
   p: BigInt(
     "2410312426921032588552076022197566074856950548502459942654116941958108831682612228890093858261341614673227141477904012196503648957050582631942730706805009223062734745341073406696246014589361659774041027169249453200378729434170325843778659198143763193776859869524088940195577346119843545301547043747207749969763750084308926339295559968882457872412993810129130294592999947926365264059284647209730384947211681434464714438488520940127459844288859336526896320919633919"
   ),
+  // g: Generator grup
   g: BigInt(2),
 
+  // Generate random BigInt
   randomBigInt: (max) => {
     const str = max.toString();
     let result = "";
@@ -27,6 +43,7 @@ const crypto = {
     return BigInt(result) % max;
   },
 
+  // Modular exponentiation: base^exp mod mod
   modPow: (base, exp, mod) => {
     let result = BigInt(1);
     base = base % mod;
@@ -40,7 +57,8 @@ const crypto = {
     return result;
   },
 
-  hashPassword: (password) => {
+  // Hash password menjadi private key (x)
+  hashToPrivateKey: (password) => {
     let hash = 0;
     for (let i = 0; i < password.length; i++) {
       hash = (hash << 5) - hash + password.charCodeAt(i);
@@ -59,42 +77,54 @@ const testResults = {
   replayTOTPExpired: { blocked: 0, passed: 0, errors: 0 },
 };
 
+// ========================================
 // Helper: Register test user
+// Sesuai proses registrasi Gambar 3.2
+// ========================================
 async function setupTestUser(suffix = "") {
   const username = `test_user_${Date.now()}${suffix}`;
   const password = "SecurePassword123!";
 
-  const privateKey = crypto.hashPassword(password);
-  const publicKey = crypto.modPow(crypto.g, privateKey, crypto.p);
+  // x = private key (dari hash password)
+  const x = schnorr.hashToPrivateKey(password);
+  // y = g^x mod p (public key) - Persamaan 2.1
+  const y = schnorr.modPow(schnorr.g, x, schnorr.p);
 
   const response = await axios.post(`${API_URL}/register`, {
     username,
-    publicKey: publicKey.toString(),
+    publicKey: y.toString(), // Hanya y yang dikirim ke server
   });
 
   return {
     username,
     password,
-    privateKey,
-    publicKey,
+    x, // private key
+    y, // public key
     totpSecret: response.data.totpSecret,
   };
 }
 
+// ========================================
 // Helper: Perform valid authentication and capture packet
+// Sesuai proses login Gambar 3.3
+// ========================================
 async function captureAuthPacket(userData) {
   const { username, password, totpSecret } = userData;
 
-  // Get challenge
+  // Get challenge (c) dari server - Persamaan 2.3
   const challengeRes = await axios.post(`${API_URL}/challenge`, { username });
-  const challenge = BigInt(challengeRes.data.challenge);
+  const c = BigInt(challengeRes.data.challenge); // c = challenge
   const sessionId = challengeRes.data.sessionId;
 
   // Generate ZKP proof
-  const privateKey = crypto.hashPassword(password);
-  const r = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-  const commitment = crypto.modPow(crypto.g, r, crypto.p);
-  const response = (r + challenge * privateKey) % (crypto.p - BigInt(1));
+  // x = private key
+  const x = schnorr.hashToPrivateKey(password);
+  // r = random nonce
+  const r = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+  // t = g^r mod p (commitment) - Persamaan 2.2
+  const t = schnorr.modPow(schnorr.g, r, schnorr.p);
+  // z = r + c*x mod (p-1) (response) - Persamaan 2.4
+  const z = (r + c * x) % (schnorr.p - BigInt(1));
 
   // Get TOTP
   const totpCode = speakeasy.totp({
@@ -104,8 +134,8 @@ async function captureAuthPacket(userData) {
 
   const packet = {
     username,
-    commitment: commitment.toString(),
-    response: response.toString(),
+    commitment: t.toString(), // t = commitment
+    response: z.toString(), // z = response
     sessionId,
     totpCode,
   };
@@ -113,21 +143,28 @@ async function captureAuthPacket(userData) {
   // Execute original auth
   const verifyRes = await axios.post(`${API_URL}/verify`, packet);
 
-  return { packet, originalResult: verifyRes.data, challenge, privateKey };
+  return { packet, originalResult: verifyRes.data, c, x };
 }
 
+// ========================================
 // Helper: Generate new ZKP proof
+// ========================================
 async function generateNewProof(userData) {
   const { username, password, totpSecret } = userData;
 
+  // Get challenge (c) - Persamaan 2.3
   const challengeRes = await axios.post(`${API_URL}/challenge`, { username });
-  const challenge = BigInt(challengeRes.data.challenge);
+  const c = BigInt(challengeRes.data.challenge);
   const sessionId = challengeRes.data.sessionId;
 
-  const privateKey = crypto.hashPassword(password);
-  const r = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-  const commitment = crypto.modPow(crypto.g, r, crypto.p);
-  const response = (r + challenge * privateKey) % (crypto.p - BigInt(1));
+  // x = private key
+  const x = schnorr.hashToPrivateKey(password);
+  // r = random nonce
+  const r = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+  // t = g^r mod p (commitment) - Persamaan 2.2
+  const t = schnorr.modPow(schnorr.g, r, schnorr.p);
+  // z = r + c*x mod (p-1) (response) - Persamaan 2.4
+  const z = (r + c * x) % (schnorr.p - BigInt(1));
 
   const totpCode = speakeasy.totp({
     secret: totpSecret,
@@ -136,12 +173,12 @@ async function generateNewProof(userData) {
 
   return {
     username,
-    commitment: commitment.toString(),
-    response: response.toString(),
+    commitment: t.toString(),
+    response: z.toString(),
     sessionId,
     totpCode,
-    challenge,
-    privateKey,
+    c,
+    x,
   };
 }
 
@@ -173,7 +210,6 @@ async function testReplayZKPProof(userData, iteration) {
       };
     }
   } catch (error) {
-    // Any error response from server means the replay was blocked
     if (error.response) {
       testResults.replayZKPProof.blocked++;
       return {
@@ -218,7 +254,6 @@ async function testReplayFullPacket(userData, iteration) {
       };
     }
   } catch (error) {
-    // Any error response from server means the replay was blocked
     if (error.response) {
       testResults.replayFullPacket.blocked++;
       return {
@@ -240,18 +275,22 @@ async function testReplaySessionId(userData, iteration) {
   try {
     const { username, password, totpSecret } = userData;
 
-    // Get first challenge
+    // Get first challenge (c)
     const challengeRes1 = await axios.post(`${API_URL}/challenge`, {
       username,
     });
-    const challenge1 = BigInt(challengeRes1.data.challenge);
+    const c1 = BigInt(challengeRes1.data.challenge);
     const sessionId = challengeRes1.data.sessionId;
 
     // Generate first proof
-    const privateKey = crypto.hashPassword(password);
-    const r1 = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-    const commitment1 = crypto.modPow(crypto.g, r1, crypto.p);
-    const response1 = (r1 + challenge1 * privateKey) % (crypto.p - BigInt(1));
+    // x = private key
+    const x = schnorr.hashToPrivateKey(password);
+    // r1 = random nonce
+    const r1 = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+    // t1 = g^r1 mod p (commitment)
+    const t1 = schnorr.modPow(schnorr.g, r1, schnorr.p);
+    // z1 = r1 + c1*x mod (p-1) (response)
+    const z1 = (r1 + c1 * x) % (schnorr.p - BigInt(1));
 
     const totpCode1 = speakeasy.totp({
       secret: totpSecret,
@@ -261,16 +300,19 @@ async function testReplaySessionId(userData, iteration) {
     // First auth (success)
     await axios.post(`${API_URL}/verify`, {
       username,
-      commitment: commitment1.toString(),
-      response: response1.toString(),
+      commitment: t1.toString(),
+      response: z1.toString(),
       sessionId,
       totpCode: totpCode1,
     });
 
     // Try to reuse same sessionId with new proof
-    const r2 = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-    const commitment2 = crypto.modPow(crypto.g, r2, crypto.p);
-    const response2 = (r2 + challenge1 * privateKey) % (crypto.p - BigInt(1));
+    // r2 = new random nonce
+    const r2 = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+    // t2 = g^r2 mod p (new commitment)
+    const t2 = schnorr.modPow(schnorr.g, r2, schnorr.p);
+    // z2 = r2 + c1*x mod (p-1) (new response with OLD challenge)
+    const z2 = (r2 + c1 * x) % (schnorr.p - BigInt(1));
 
     // Generate new TOTP (different from first)
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -281,8 +323,8 @@ async function testReplaySessionId(userData, iteration) {
 
     const replayRes = await axios.post(`${API_URL}/verify`, {
       username,
-      commitment: commitment2.toString(),
-      response: response2.toString(),
+      commitment: t2.toString(),
+      response: z2.toString(),
       sessionId, // SAME session ID
       totpCode: totpCode2,
     });
@@ -303,7 +345,6 @@ async function testReplaySessionId(userData, iteration) {
       };
     }
   } catch (error) {
-    // Any error response from server means the replay was blocked
     if (error.response) {
       testResults.replaySessionId.blocked++;
       return {
@@ -324,7 +365,7 @@ async function testReplaySessionId(userData, iteration) {
 async function testReplayTOTPSameWindow(userData, iteration) {
   try {
     const { username, password, totpSecret } = userData;
-    const privateKey = crypto.hashPassword(password);
+    const x = schnorr.hashToPrivateKey(password);
 
     // Generate TOTP yang akan kita capture dan replay
     const capturedTOTP = speakeasy.totp({
@@ -333,23 +374,23 @@ async function testReplayTOTPSameWindow(userData, iteration) {
     });
 
     // === FIRST AUTH ===
-    // Get challenge untuk auth pertama
+    // Get challenge (c1)
     const challengeRes1 = await axios.post(`${API_URL}/challenge`, {
       username,
     });
-    const challenge1 = BigInt(challengeRes1.data.challenge);
+    const c1 = BigInt(challengeRes1.data.challenge);
     const sessionId1 = challengeRes1.data.sessionId;
 
     // Generate ZKP proof pertama
-    const r1 = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-    const commitment1 = crypto.modPow(crypto.g, r1, crypto.p);
-    const response1 = (r1 + challenge1 * privateKey) % (crypto.p - BigInt(1));
+    const r1 = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+    const t1 = schnorr.modPow(schnorr.g, r1, schnorr.p);
+    const z1 = (r1 + c1 * x) % (schnorr.p - BigInt(1));
 
     // Execute first auth
     const firstRes = await axios.post(`${API_URL}/verify`, {
       username,
-      commitment: commitment1.toString(),
-      response: response1.toString(),
+      commitment: t1.toString(),
+      response: z1.toString(),
       sessionId: sessionId1,
       totpCode: capturedTOTP,
     });
@@ -364,23 +405,23 @@ async function testReplayTOTPSameWindow(userData, iteration) {
     }
 
     // === REPLAY ATTEMPT ===
-    // Get NEW challenge untuk replay attempt
+    // Get NEW challenge (c2)
     const challengeRes2 = await axios.post(`${API_URL}/challenge`, {
       username,
     });
-    const challenge2 = BigInt(challengeRes2.data.challenge);
+    const c2 = BigInt(challengeRes2.data.challenge);
     const sessionId2 = challengeRes2.data.sessionId;
 
     // Generate NEW ZKP proof (valid)
-    const r2 = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-    const commitment2 = crypto.modPow(crypto.g, r2, crypto.p);
-    const response2 = (r2 + challenge2 * privateKey) % (crypto.p - BigInt(1));
+    const r2 = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+    const t2 = schnorr.modPow(schnorr.g, r2, schnorr.p);
+    const z2 = (r2 + c2 * x) % (schnorr.p - BigInt(1));
 
     // Attempt replay with SAME TOTP code (should be blocked by nonce tracking)
     const replayRes = await axios.post(`${API_URL}/verify`, {
       username,
-      commitment: commitment2.toString(),
-      response: response2.toString(),
+      commitment: t2.toString(),
+      response: z2.toString(),
       sessionId: sessionId2,
       totpCode: capturedTOTP, // SAME TOTP - replay attempt!
     });
@@ -413,7 +454,6 @@ async function testReplayTOTPSameWindow(userData, iteration) {
       };
     }
   } catch (error) {
-    // Check if the error response indicates blocked replay
     if (error.response && error.response.data) {
       if (!error.response.data.success) {
         if (
@@ -459,19 +499,19 @@ async function testReplayTOTPExpired(userData, iteration) {
 
     // Generate fresh ZKP proof
     const challengeRes = await axios.post(`${API_URL}/challenge`, { username });
-    const challenge = BigInt(challengeRes.data.challenge);
+    const c = BigInt(challengeRes.data.challenge);
     const sessionId = challengeRes.data.sessionId;
 
-    const privateKey = crypto.hashPassword(password);
-    const r = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-    const commitment = crypto.modPow(crypto.g, r, crypto.p);
-    const response = (r + challenge * privateKey) % (crypto.p - BigInt(1));
+    const x = schnorr.hashToPrivateKey(password);
+    const r = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+    const t = schnorr.modPow(schnorr.g, r, schnorr.p);
+    const z = (r + c * x) % (schnorr.p - BigInt(1));
 
     // Try to use expired TOTP
     const replayRes = await axios.post(`${API_URL}/verify`, {
       username,
-      commitment: commitment.toString(),
-      response: response.toString(),
+      commitment: t.toString(),
+      response: z.toString(),
       sessionId,
       totpCode: expiredTOTP,
     });
@@ -492,7 +532,6 @@ async function testReplayTOTPExpired(userData, iteration) {
       };
     }
   } catch (error) {
-    // Any error response from server means the expired TOTP was blocked
     if (error.response) {
       testResults.replayTOTPExpired.blocked++;
       return {
@@ -911,7 +950,7 @@ function printResults(scenariosRun) {
 // ============================================
 function showMenu() {
   console.log(
-    "\n╔════════════════════════════════════════════════════════════════╗"
+    "\n╔═════════════════════════════════════════════════════════════════╗"
   );
   console.log(
     "║          PENGUJIAN KEAMANAN - REPLAY ATTACK                    ║"
@@ -926,11 +965,11 @@ function showMenu() {
     "║          dan NIST SP 800-63B                                   ║"
   );
   console.log(
-    "╚════════════════════════════════════════════════════════════════╝\n"
+    "╚═════════════════════════════════════════════════════════════════╝\n"
   );
 
   console.log("Pastikan server berjalan di http://localhost:3001\n");
-  console.log("━".repeat(66));
+  console.log("─".repeat(66));
   console.log("\n  PILIH SKENARIO PENGUJIAN:\n");
   console.log(
     "  ┌─────────────────────────────────────────────────────────────┐"
@@ -1034,7 +1073,7 @@ async function main() {
 
       case "6":
         console.log("\n▶ MENJALANKAN SEMUA SKENARIO...\n");
-        console.log("━".repeat(66));
+        console.log("─".repeat(66));
 
         console.log("\n▶ LAYER ZKP - REPLAY ATTACK\n");
         await runScenario1();

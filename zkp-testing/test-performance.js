@@ -1,6 +1,16 @@
 /**
  * PERFORMANCE TESTING - Sesuai Tabel 4.7 dan Tabel 4.9 Bab 4
  * Test Cases untuk Pengujian Performa dan Load Testing
+ *
+ * Notasi Protokol Schnorr (Tabel 2.1):
+ *   p = Bilangan prima besar (modulus)
+ *   g = Generator grup
+ *   x = Nilai rahasia (private key)
+ *   y = g^x mod p (public key)
+ *   r = Nonce acak
+ *   t = g^r mod p (commitment)
+ *   c = Challenge
+ *   z = r + cx mod p (response)
  */
 
 const axios = require("axios");
@@ -8,13 +18,19 @@ const speakeasy = require("speakeasy");
 
 const API_URL = "http://localhost:3001/api";
 
-// Crypto functions
-const crypto = {
+// ========================================
+// Schnorr Protocol Functions
+// Sesuai Tabel 2.1 Bab 2
+// ========================================
+const schnorr = {
+  // p: Bilangan prima besar (modulus)
   p: BigInt(
     "2410312426921032588552076022197566074856950548502459942654116941958108831682612228890093858261341614673227141477904012196503648957050582631942730706805009223062734745341073406696246014589361659774041027169249453200378729434170325843778659198143763193776859869524088940195577346119843545301547043747207749969763750084308926339295559968882457872412993810129130294592999947926365264059284647209730384947211681434464714438488520940127459844288859336526896320919633919"
   ),
+  // g: Generator grup
   g: BigInt(2),
 
+  // Generate random BigInt
   randomBigInt: (max) => {
     const str = max.toString();
     let result = "";
@@ -24,6 +40,7 @@ const crypto = {
     return BigInt(result) % max;
   },
 
+  // Modular exponentiation: base^exp mod mod
   modPow: (base, exp, mod) => {
     let result = BigInt(1);
     base = base % mod;
@@ -37,7 +54,8 @@ const crypto = {
     return result;
   },
 
-  hashPassword: (password) => {
+  // Hash password menjadi private key (x)
+  hashToPrivateKey: (password) => {
     let hash = 0;
     for (let i = 0; i < password.length; i++) {
       hash = (hash << 5) - hash + password.charCodeAt(i);
@@ -86,8 +104,16 @@ function calculateStats(values) {
 // PERFORMANCE TEST CASES
 // ============================================
 
+/**
+ * PERF01: Client-side Key Generation
+ * Mengukur waktu untuk generate x (private key) dan y (public key)
+ * Sesuai Persamaan 2.1: y = g^x mod p
+ */
 async function PERF01_ClientSideKeyGeneration() {
   console.log("\n⏱️  Testing: Client-side Key Generation Performance...");
+  console.log(
+    "    Mengukur: x = hash(password), y = g^x mod p (Persamaan 2.1)"
+  );
 
   const iterations = 100;
   const times = [];
@@ -96,8 +122,10 @@ async function PERF01_ClientSideKeyGeneration() {
     const password = `TestPassword${i}`;
     const start = performance.now();
 
-    const privateKey = crypto.hashPassword(password);
-    const publicKey = crypto.modPow(crypto.g, privateKey, crypto.p);
+    // x = private key (dari hash password)
+    const x = schnorr.hashToPrivateKey(password);
+    // y = g^x mod p (public key) - Persamaan 2.1
+    const y = schnorr.modPow(schnorr.g, x, schnorr.p);
 
     const end = performance.now();
     times.push(end - start);
@@ -118,6 +146,9 @@ async function PERF01_ClientSideKeyGeneration() {
   return stats;
 }
 
+/**
+ * PERF02: Registration Time (with TOTP setup)
+ */
 async function PERF02_RegistrationTime() {
   console.log("\n⏱️  Testing: Registration Performance (with TOTP setup)...");
 
@@ -130,12 +161,14 @@ async function PERF02_RegistrationTime() {
 
     const start = performance.now();
 
-    const privateKey = crypto.hashPassword(password);
-    const publicKey = crypto.modPow(crypto.g, privateKey, crypto.p);
+    // x = private key
+    const x = schnorr.hashToPrivateKey(password);
+    // y = g^x mod p (public key)
+    const y = schnorr.modPow(schnorr.g, x, schnorr.p);
 
     await axios.post(`${API_URL}/register`, {
       username,
-      publicKey: publicKey.toString(),
+      publicKey: y.toString(),
     });
 
     const end = performance.now();
@@ -157,18 +190,21 @@ async function PERF02_RegistrationTime() {
   return stats;
 }
 
+/**
+ * PERF03: Challenge Request
+ */
 async function PERF03_ChallengeRequest() {
   console.log("\n⏱️  Testing: Challenge Request Performance...");
 
   // Setup test user first
   const username = `perftest_challenge_${Date.now()}`;
   const password = "TestPassword123!";
-  const privateKey = crypto.hashPassword(password);
-  const publicKey = crypto.modPow(crypto.g, privateKey, crypto.p);
+  const x = schnorr.hashToPrivateKey(password);
+  const y = schnorr.modPow(schnorr.g, x, schnorr.p);
 
   await axios.post(`${API_URL}/register`, {
     username,
-    publicKey: publicKey.toString(),
+    publicKey: y.toString(),
   });
 
   const iterations = 100;
@@ -195,23 +231,35 @@ async function PERF03_ChallengeRequest() {
   return stats;
 }
 
+/**
+ * PERF04: ZKP Proof Generation (client-side)
+ * Mengukur waktu untuk generate:
+ * - r (random nonce)
+ * - t = g^r mod p (commitment) - Persamaan 2.2
+ * - z = r + c*x mod p (response) - Persamaan 2.4
+ */
 async function PERF04_ZKPProofGeneration() {
   console.log("\n⏱️  Testing: ZKP Proof Generation (client-side)...");
+  console.log("    Mengukur: r, t = g^r mod p (2.2), z = r + cx mod p (2.4)");
 
   const iterations = 100;
   const times = [];
 
   const password = "TestPassword123!";
-  const privateKey = crypto.hashPassword(password);
+  const x = schnorr.hashToPrivateKey(password);
 
   for (let i = 0; i < iterations; i++) {
-    const challenge = crypto.p - BigInt(Math.floor(Math.random() * 1000000000));
+    // Simulasi challenge dari server
+    const c = schnorr.p - BigInt(Math.floor(Math.random() * 1000000000));
 
     const start = performance.now();
 
-    const r = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-    const commitment = crypto.modPow(crypto.g, r, crypto.p);
-    const response = (r + challenge * privateKey) % (crypto.p - BigInt(1));
+    // r = random nonce
+    const r = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+    // t = g^r mod p (commitment) - Persamaan 2.2
+    const t = schnorr.modPow(schnorr.g, r, schnorr.p);
+    // z = r + c*x mod (p-1) (response) - Persamaan 2.4
+    const z = (r + c * x) % (schnorr.p - BigInt(1));
 
     const end = performance.now();
     times.push(end - start);
@@ -229,18 +277,21 @@ async function PERF04_ZKPProofGeneration() {
   return stats;
 }
 
+/**
+ * PERF05: Complete Login Time (end-to-end)
+ */
 async function PERF05_CompleteLoginTime() {
   console.log("\n⏱️  Testing: Complete Login Time (end-to-end)...");
 
   // Setup test user
   const username = `perftest_login_${Date.now()}`;
   const password = "TestPassword123!";
-  const privateKey = crypto.hashPassword(password);
-  const publicKey = crypto.modPow(crypto.g, privateKey, crypto.p);
+  const x = schnorr.hashToPrivateKey(password);
+  const y = schnorr.modPow(schnorr.g, x, schnorr.p);
 
   const regRes = await axios.post(`${API_URL}/register`, {
     username,
-    publicKey: publicKey.toString(),
+    publicKey: y.toString(),
   });
 
   const totpSecret = regRes.data.totpSecret;
@@ -251,15 +302,18 @@ async function PERF05_CompleteLoginTime() {
   for (let i = 0; i < iterations; i++) {
     const start = performance.now();
 
-    // Step 1: Get challenge
+    // Step 1: Get challenge (c)
     const challengeRes = await axios.post(`${API_URL}/challenge`, { username });
-    const challenge = BigInt(challengeRes.data.challenge);
+    const c = BigInt(challengeRes.data.challenge);
     const sessionId = challengeRes.data.sessionId;
 
     // Step 2: Generate proof
-    const r = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-    const commitment = crypto.modPow(crypto.g, r, crypto.p);
-    const response = (r + challenge * privateKey) % (crypto.p - BigInt(1));
+    // r = random nonce
+    const r = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+    // t = g^r mod p (commitment)
+    const t = schnorr.modPow(schnorr.g, r, schnorr.p);
+    // z = r + c*x mod (p-1) (response)
+    const z = (r + c * x) % (schnorr.p - BigInt(1));
 
     // Step 3: Get TOTP
     const totpCode = speakeasy.totp({
@@ -270,8 +324,8 @@ async function PERF05_CompleteLoginTime() {
     // Step 4: Verify
     await axios.post(`${API_URL}/verify`, {
       username,
-      commitment: commitment.toString(),
-      response: response.toString(),
+      commitment: t.toString(),
+      response: z.toString(),
       sessionId,
       totpCode,
     });
@@ -296,6 +350,9 @@ async function PERF05_CompleteLoginTime() {
   return stats;
 }
 
+/**
+ * PERF06: Concurrent Logins (100 users)
+ */
 async function PERF06_ConcurrentLogins() {
   console.log("\n⏱️  Testing: Concurrent Login Performance...");
 
@@ -306,18 +363,18 @@ async function PERF06_ConcurrentLogins() {
   for (let i = 0; i < 100; i++) {
     const username = `concurrent_test_${Date.now()}_${i}`;
     const password = "TestPassword123!";
-    const privateKey = crypto.hashPassword(password);
-    const publicKey = crypto.modPow(crypto.g, privateKey, crypto.p);
+    const x = schnorr.hashToPrivateKey(password);
+    const y = schnorr.modPow(schnorr.g, x, schnorr.p);
 
     const regRes = await axios.post(`${API_URL}/register`, {
       username,
-      publicKey: publicKey.toString(),
+      publicKey: y.toString(),
     });
 
     users.push({
       username,
       password,
-      privateKey,
+      x,
       totpSecret: regRes.data.totpSecret,
     });
 
@@ -336,18 +393,17 @@ async function PERF06_ConcurrentLogins() {
     const loginStart = performance.now();
 
     try {
-      // Get challenge
+      // Get challenge (c)
       const challengeRes = await axios.post(`${API_URL}/challenge`, {
         username: user.username,
       });
-      const challenge = BigInt(challengeRes.data.challenge);
+      const c = BigInt(challengeRes.data.challenge);
       const sessionId = challengeRes.data.sessionId;
 
       // Generate proof
-      const r = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-      const commitment = crypto.modPow(crypto.g, r, crypto.p);
-      const response =
-        (r + challenge * user.privateKey) % (crypto.p - BigInt(1));
+      const r = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+      const t = schnorr.modPow(schnorr.g, r, schnorr.p);
+      const z = (r + c * user.x) % (schnorr.p - BigInt(1));
 
       // Get TOTP
       const totpCode = speakeasy.totp({
@@ -358,8 +414,8 @@ async function PERF06_ConcurrentLogins() {
       // Verify
       await axios.post(`${API_URL}/verify`, {
         username: user.username,
-        commitment: commitment.toString(),
-        response: response.toString(),
+        commitment: t.toString(),
+        response: z.toString(),
         sessionId,
         totpCode,
       });
@@ -410,18 +466,25 @@ async function PERF06_ConcurrentLogins() {
   };
 }
 
+/**
+ * PERF07: Server-side ZKP Verification Time
+ * Mengukur waktu server untuk memverifikasi: g^z ≡ t × y^c (mod p) - Persamaan 2.5
+ */
 async function PERF07_ServerSideVerification() {
   console.log("\n⏱️  Testing: Server-side ZKP Verification Time...");
+  console.log(
+    "    Server memverifikasi: g^z ≡ t × y^c (mod p) - Persamaan 2.5"
+  );
 
   // Setup test user
   const username = `perftest_verify_${Date.now()}`;
   const password = "TestPassword123!";
-  const privateKey = crypto.hashPassword(password);
-  const publicKey = crypto.modPow(crypto.g, privateKey, crypto.p);
+  const x = schnorr.hashToPrivateKey(password);
+  const y = schnorr.modPow(schnorr.g, x, schnorr.p);
 
   const regRes = await axios.post(`${API_URL}/register`, {
     username,
-    publicKey: publicKey.toString(),
+    publicKey: y.toString(),
   });
 
   const totpSecret = regRes.data.totpSecret;
@@ -432,13 +495,13 @@ async function PERF07_ServerSideVerification() {
   for (let i = 0; i < iterations; i++) {
     // Get challenge
     const challengeRes = await axios.post(`${API_URL}/challenge`, { username });
-    const challenge = BigInt(challengeRes.data.challenge);
+    const c = BigInt(challengeRes.data.challenge);
     const sessionId = challengeRes.data.sessionId;
 
     // Generate proof
-    const r = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-    const commitment = crypto.modPow(crypto.g, r, crypto.p);
-    const response = (r + challenge * privateKey) % (crypto.p - BigInt(1));
+    const r = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+    const t = schnorr.modPow(schnorr.g, r, schnorr.p);
+    const z = (r + c * x) % (schnorr.p - BigInt(1));
 
     const totpCode = speakeasy.totp({
       secret: totpSecret,
@@ -450,8 +513,8 @@ async function PERF07_ServerSideVerification() {
 
     await axios.post(`${API_URL}/verify`, {
       username,
-      commitment: commitment.toString(),
-      response: response.toString(),
+      commitment: t.toString(),
+      response: z.toString(),
       sessionId,
       totpCode,
     });
@@ -488,12 +551,18 @@ async function PERF08_OverheadComparison() {
   console.log("\n  📊 Client-side operations:");
   const clientStart = performance.now();
 
-  const privateKey = crypto.hashPassword(password);
-  const publicKey = crypto.modPow(crypto.g, privateKey, crypto.p);
-  const r = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-  const commitment = crypto.modPow(crypto.g, r, crypto.p);
-  const challenge = crypto.p - BigInt(1000000);
-  const response = (r + challenge * privateKey) % (crypto.p - BigInt(1));
+  // x = private key
+  const x = schnorr.hashToPrivateKey(password);
+  // y = g^x mod p (public key)
+  const y = schnorr.modPow(schnorr.g, x, schnorr.p);
+  // r = random nonce
+  const r = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+  // t = g^r mod p (commitment)
+  const t = schnorr.modPow(schnorr.g, r, schnorr.p);
+  // Simulasi challenge
+  const c = schnorr.p - BigInt(1000000);
+  // z = r + c*x mod (p-1) (response)
+  const z = (r + c * x) % (schnorr.p - BigInt(1));
 
   const clientEnd = performance.now();
   const clientTime = clientEnd - clientStart;
@@ -503,7 +572,7 @@ async function PERF08_OverheadComparison() {
   // Register user and measure server overhead
   const regRes = await axios.post(`${API_URL}/register`, {
     username,
-    publicKey: publicKey.toString(),
+    publicKey: y.toString(),
   });
 
   const totpSecret = regRes.data.totpSecret;
@@ -514,10 +583,9 @@ async function PERF08_OverheadComparison() {
   const sessionId = challengeRes.data.sessionId;
 
   // Generate new proof with server challenge
-  const r2 = crypto.randomBigInt(crypto.p - BigInt(1)) + BigInt(1);
-  const commitment2 = crypto.modPow(crypto.g, r2, crypto.p);
-  const response2 =
-    (r2 + serverChallenge * privateKey) % (crypto.p - BigInt(1));
+  const r2 = schnorr.randomBigInt(schnorr.p - BigInt(1)) + BigInt(1);
+  const t2 = schnorr.modPow(schnorr.g, r2, schnorr.p);
+  const z2 = (r2 + serverChallenge * x) % (schnorr.p - BigInt(1));
 
   const totpCode = speakeasy.totp({
     secret: totpSecret,
@@ -529,8 +597,8 @@ async function PERF08_OverheadComparison() {
 
   await axios.post(`${API_URL}/verify`, {
     username,
-    commitment: commitment2.toString(),
-    response: response2.toString(),
+    commitment: t2.toString(),
+    response: z2.toString(),
     sessionId,
     totpCode,
   });
@@ -570,6 +638,11 @@ async function runPerformanceTests() {
   console.log("PERFORMANCE TESTING");
   console.log("ZKP + TOTP Authentication System");
   console.log("========================================\n");
+  console.log("Notasi Protokol Schnorr (Tabel 2.1):");
+  console.log("  x = private key, y = g^x mod p (public key)");
+  console.log("  r = nonce, t = g^r mod p (commitment)");
+  console.log("  c = challenge, z = r + cx mod p (response)");
+  console.log("  Verifikasi: g^z ≡ t × y^c (mod p)\n");
   console.log("⚠️  Pastikan server sudah berjalan di http://localhost:3001\n");
 
   const results = {};
