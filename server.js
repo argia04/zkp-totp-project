@@ -11,13 +11,27 @@ app.use(bodyParser.json());
 // Database simulasi (dalam praktik gunakan database real)
 const users = {};
 
+// ========================================
 // Konstanta untuk Schnorr Protocol
-const crypto = {
+// Berdasarkan Notasi Bab 2 (Tabel 2.1):
+//   p = Bilangan prima besar (modulus)
+//   g = Generator grup
+//   x = Nilai rahasia (private key)
+//   y = g^x mod p (public key)
+//   r = Nonce acak
+//   t = g^r mod p (commitment)
+//   c = Challenge
+//   z = r + cx mod p (response)
+// ========================================
+const schnorr = {
+  // p: Bilangan prima besar (modulus) - sesuai Tabel 2.1
   p: BigInt(
     "2410312426921032588552076022197566074856950548502459942654116941958108831682612228890093858261341614673227141477904012196503648957050582631942730706805009223062734745341073406696246014589361659774041027169249453200378729434170325843778659198143763193776859869524088940195577346119843545301547043747207749969763750084308926339295559968882457872412993810129130294592999947926365264059284647209730384947211681434464714438488520940127459844288859336526896320919633919"
   ),
+  // g: Generator grup - sesuai Tabel 2.1
   g: BigInt(2),
 
+  // Fungsi modular exponentiation: base^exp mod mod
   modPow: (base, exp, mod) => {
     let result = BigInt(1);
     base = base % mod;
@@ -79,13 +93,14 @@ function cleanupExpiredChallenges(user) {
 
 // ========================================
 // ENDPOINT: REGISTRASI
+// Server menerima public key y = g^x mod p dari client
 // ========================================
 app.post("/api/register", async (req, res) => {
   const { username, publicKey } = req.body;
 
   console.log("\n===== REGISTRASI DIMULAI =====");
   console.log("Username:", username);
-  console.log("Public Key diterima:", publicKey);
+  console.log("Public Key (y) diterima:", publicKey);
 
   // Check if username already exists
   if (users[username]) {
@@ -107,15 +122,18 @@ app.post("/api/register", async (req, res) => {
   const qrCode = await QRCode.toDataURL(secret.otpauth_url);
 
   // Simpan user dengan struktur yang lebih lengkap
+  // y (publicKey) disimpan di server, x (privateKey) TIDAK PERNAH dikirim
   users[username] = {
-    publicKey: BigInt(publicKey),
+    y: BigInt(publicKey), // y = public key (sesuai notasi Tabel 2.1)
     totpSecret: secret.base32,
     challenges: {},
-    usedTOTPs: [], // BARU: Track TOTP yang sudah digunakan
+    usedTOTPs: [], // Track TOTP yang sudah digunakan
     createdAt: Date.now(),
   };
 
   console.log("User berhasil terdaftar");
+  console.log("Public key (y) tersimpan di server");
+  console.log("Private key (x) TIDAK PERNAH dikirim ke server");
   console.log("TOTP Secret:", secret.base32);
   console.log("================================\n");
 
@@ -128,6 +146,7 @@ app.post("/api/register", async (req, res) => {
 
 // ========================================
 // ENDPOINT: REQUEST CHALLENGE
+// Server mengirim challenge (c) ke client - sesuai Persamaan 2.3
 // ========================================
 app.post("/api/challenge", (req, res) => {
   const { username } = req.body;
@@ -141,32 +160,33 @@ app.post("/api/challenge", (req, res) => {
   // Cleanup expired challenges
   cleanupExpiredChallenges(user);
 
-  // Generate random challenge
-  const challenge = crypto.p - BigInt(Math.floor(Math.random() * 1000000000));
+  // Generate random challenge (c) - sesuai Persamaan 2.3: c ← Zp
+  const c = schnorr.p - BigInt(Math.floor(Math.random() * 1000000000));
   const sessionId =
     Date.now().toString() + Math.random().toString(36).substring(2);
 
   // Simpan challenge dengan timestamp
   user.challenges[sessionId] = {
-    value: challenge,
+    value: c,
     timestamp: Date.now(),
   };
 
   console.log("\n===== CHALLENGE DIKIRIM =====");
   console.log("Username:", username);
-  console.log("Challenge (c):", challenge.toString());
+  console.log("Challenge (c):", c.toString().substring(0, 30) + "...");
   console.log("Session ID:", sessionId);
   console.log("Expires in:", CHALLENGE_EXPIRY_MS / 1000, "seconds");
   console.log("================================\n");
 
   res.json({
-    challenge: challenge.toString(),
+    challenge: c.toString(),
     sessionId: sessionId,
   });
 });
 
 // ========================================
 // ENDPOINT: VERIFY ZKP + TOTP
+// Verifikasi sesuai Persamaan 2.5: g^z ≡ t · y^c (mod p)
 // ========================================
 app.post("/api/verify", (req, res) => {
   const { username, commitment, response, sessionId, totpCode } = req.body;
@@ -255,34 +275,41 @@ app.post("/api/verify", (req, res) => {
     });
   }
 
-  const challenge = challengeData.value;
-
+  // ========================================
   // Mekanisme 4: Random Nonce - Verifikasi matematis Schnorr
+  // Notasi sesuai Tabel 2.1 dan Persamaan 2.5:
+  //   t = commitment (g^r mod p)
+  //   z = response (r + cx mod p)
+  //   c = challenge
+  //   y = public key (g^x mod p)
+  // Verifikasi: g^z ≡ t · y^c (mod p)
+  // ========================================
   console.log("\n[PROTEKSI] Random Nonce & Schnorr Verification");
   console.log("  → Commitment (t) diterima dari client");
   console.log("  → Response (z) diterima dari client");
   console.log(
     "  → Challenge (c) dari server:",
-    challenge.toString().substring(0, 30) + "..."
+    challengeData.value.toString().substring(0, 30) + "..."
   );
 
-  const t = BigInt(commitment);
-  const s = BigInt(response);
-  const c = challenge;
-  const y = user.publicKey;
+  // Parse nilai sesuai notasi Tabel 2.1
+  const t = BigInt(commitment); // t = commitment (Persamaan 2.2)
+  const z = BigInt(response); // z = response (Persamaan 2.4)
+  const c = challengeData.value; // c = challenge (Persamaan 2.3)
+  const y = user.y; // y = public key (Persamaan 2.1)
 
-  console.log("\n  Verifikasi Schnorr: g^z ≡ t × y^c (mod p)");
+  console.log("\n  Verifikasi Schnorr (Persamaan 2.5): g^z ≡ t × y^c (mod p)");
 
   // Calculate left side: g^z mod p
-  const leftSide = crypto.modPow(crypto.g, s, crypto.p);
+  const leftSide = schnorr.modPow(schnorr.g, z, schnorr.p);
   console.log(
     "  → Left side (g^z mod p):",
     leftSide.toString().substring(0, 40) + "..."
   );
 
   // Calculate right side: t * y^c mod p
-  const yPowC = crypto.modPow(y, c, crypto.p);
-  const rightSide = (t * yPowC) % crypto.p;
+  const yPowC = schnorr.modPow(y, c, schnorr.p);
+  const rightSide = (t * yPowC) % schnorr.p;
   console.log(
     "  → Right side (t × y^c mod p):",
     rightSide.toString().substring(0, 40) + "..."
@@ -450,6 +477,16 @@ app.listen(PORT, () => {
   console.log(`ZKP + TOTP Authentication Server`);
   console.log(`========================================`);
   console.log(`Server berjalan di http://localhost:${PORT}`);
+  console.log(`\nNotasi Protokol Schnorr (Tabel 2.1):`);
+  console.log(`  p = Bilangan prima besar (modulus)`);
+  console.log(`  g = Generator grup`);
+  console.log(`  x = Private key (TIDAK disimpan di server)`);
+  console.log(`  y = g^x mod p (Public key)`);
+  console.log(`  r = Random nonce`);
+  console.log(`  t = g^r mod p (Commitment)`);
+  console.log(`  c = Challenge`);
+  console.log(`  z = r + cx mod p (Response)`);
+  console.log(`\nVerifikasi (Persamaan 2.5): g^z ≡ t × y^c (mod p)`);
   console.log(`\nFitur Keamanan:`);
   console.log(`  ✓ TOTP Nonce Tracking (Replay Prevention)`);
   console.log(`  ✓ Challenge Expiry (${CHALLENGE_EXPIRY_MS / 1000}s)`);
